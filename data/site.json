@@ -1,5 +1,6 @@
 {
     "name": "কোডপট",
+    "tagline": "কোড থেকে সোশ্যাল মিডিয়ার পোস্টার",
     "description": "কোড পেস্ট করলে বাংলা শিরোনাম ও ব্যাখ্যাসহ Facebook ও LinkedIn-এর মাপে পোস্টার তৈরি হয়।",
     "lang": "bn",
     "url": "https://msilabs.github.io",

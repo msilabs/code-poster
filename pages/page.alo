@@ -1,15 +1,13 @@
 <template>
-<header class="bar">
-  <div class="brand"><span class="logo"><b>&lt;/&gt;</b>কোডপট</span><span class="sub">msilabs পোস্টের পোস্টার</span></div>
-  <div class="actions">
-    <button class="btn" id="btnCopy" type="button">কপি</button>
-    <button class="btn primary" id="btnSave" type="button">ছবি সেভ করুন</button>
-  </div>
-</header>
-
 <main class="work">
   <section class="stage" aria-label="প্রিভিউ">
-    <div class="seg" id="sizes" role="radiogroup" aria-label="ছবির মাপ"></div>
+    <div class="stagebar">
+      <div class="seg" id="sizes" role="radiogroup" aria-label="ছবির মাপ"></div>
+      <div class="actions">
+        <button class="btn" id="btnCopy" type="button">কপি</button>
+        <button class="btn primary" id="btnSave" type="button">ছবি সেভ করুন</button>
+      </div>
+    </div>
     <div class="canvasWrap"><canvas id="poster" width="1080" height="1350" aria-label="পোস্টারের প্রিভিউ"></canvas></div>
     <div class="dots" id="themes" role="radiogroup" aria-label="থিম"><span class="lbl">থিম</span></div>
   </section>
