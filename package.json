@@ -1,5 +1,5 @@
 {
-    "name": "msilabs-poster-maker",
+    "name": "code-poster",
     "private": true,
     "description": "কোড পেস্ট করলে বাংলা ব্যাখ্যাসহ সোশ্যাল মিডিয়ার পোস্টার তৈরি হয়",
     "engines": {

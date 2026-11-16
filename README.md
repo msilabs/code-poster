@@ -1,4 +1,4 @@
-# msilabs poster maker
+# Code Poster
 
 কোড পেস্ট করলে বাংলা শিরোনাম ও ব্যাখ্যাসহ Facebook ও LinkedIn-এর মাপে পোস্টার তৈরি হয়।
 
@@ -19,7 +19,7 @@ npm run dev     # http://localhost:3000
 npm run build   # dist/ ফোল্ডারে সাইট
 ```
 
-GitHub Pages-এর মতো সাব-পাথের জন্য: `node alo build --base /msilabs-poster-maker/`
+GitHub Pages-এর মতো সাব-পাথের জন্য: `node alo build --base /code-poster/`
 
 ## ফাইল কোথায়
 
