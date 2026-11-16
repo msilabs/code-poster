@@ -23,6 +23,9 @@ const LANGS = [
 ];
 const LANG_LABEL = Object.fromEntries(LANGS);
 const THEMES = {
+  msilabs:{name:"msilabs",bg1:"#0E182D",bg2:"#1B2B4D",dot:"#FFFFFF",fg:"#F5F7FB",muted:"#A3B2CE",accent:"#1ED6A8",onAccent:"#14213D",
+    card:"#0A1325",cardLine:"rgba(30,214,168,0.16)",shadow:"rgba(0,0,0,0.5)",gutter:"#3A4B6E",
+    syn:{fg:"#E6EBF5",kw:"#9A8CFF",str:"#5EEBC4",num:"#FFB020",com:"#66779A",fn:"#7CC4FF",type:"#C4B5FD",bi:"#1ED6A8",attr:"#FFD27A",tag:"#9A8CFF",meta:"#8FA0BF",punc:"#A3B2CE"}},
   night:{name:"রাত",bg1:"#0B1220",bg2:"#1B2643",dot:"#FFFFFF",fg:"#F2F5FB",muted:"#9AA6BF",accent:"#FFB547",onAccent:"#1A1206",
     card:"#090F1D",cardLine:"rgba(255,255,255,0.09)",shadow:"rgba(0,0,0,0.5)",gutter:"#3D4863",
     syn:{fg:"#E3E9F4",kw:"#FF7AB6",str:"#A6E07A",num:"#FFB547",com:"#6A7794",fn:"#7CC7FF",type:"#C9A2FF",bi:"#5EE0D0",attr:"#FFD58A",tag:"#FF7AB6",meta:"#8FA0BF",punc:"#9AA6BF"}},
@@ -63,37 +66,62 @@ const store = {
   set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
 
-/* ---------- posts ---------- */
-const DESIGN_KEYS = ["size","theme","accent","fontBn","fontCode","codeSize","handle","footer","showLineNo","showChrome"];
+/* ---------- posts (tabs) ---------- */
+const MAX_TABS = 5;
+const KEY = {tabs: "kodpot.tabs", current: "kodpot.currentPoster", archive: "kodpot.archive", archiveHidden: "kodpot.archiveHidden", pane: "kodpot.pane"};
+const DESIGN_KEYS = ["size","theme","accent","logo","fontBn","fontCode","codeSize","handle","footer","showLineNo","showChrome"];
 function samplePost(){
   return {
     id: uid(), updated: Date.now(),
-    size: "portrait", theme: "night", accent: null, fontBn: "Noto Sans Bengali", fontCode: "JetBrains Mono",
+    size: "portrait", theme: "msilabs", accent: null, logo: null, fontBn: "Noto Sans Bengali", fontCode: "JetBrains Mono",
     codeSize: 0, handle: "msilabs", footer: "প্রতি সপ্তাহে নতুন কোড টিপস", showLineNo: true, showChrome: true,
-    tag: "JavaScript টিপস", title: "map() নতুন অ্যারে বানায়",
-    body: "প্রতিটা উপাদান বদলে একটা **নতুন অ্যারে** ফেরত দেয়, মূল অ্যারে যেমন ছিল তেমনই থাকে। শুধু কাজ চালাতে চাইলে `forEach()` যথেষ্ট।",
-    code: "const prices = [120, 250, 80];\n\n// ১৫% ভ্যাট যোগ করে নতুন দাম\nconst withVat = prices.map((price) =>\n  Math.round(price * 1.15)\n);\n\nconsole.log(withVat); // [138, 288, 92]\nconsole.log(prices);  // [120, 250, 80]",
-    lang: "javascript", file: "map.js"
+    ...SAMPLE_CONTENT
   };
 }
-let library = store.get("kodpot.posters", []);
-library.forEach(p => { if (!BN_FONTS[p.fontBn]) p.fontBn = "Noto Sans Bengali"; });
-let state = library.find(p => p.id === store.get("kodpot.currentPoster", null)) || library[0];
-if (!state) { state = samplePost(); library = [clone(state)]; }
-state = clone(state);
-
-let saveTimer;
-function commit(){
-  state.updated = Date.now();
-  const i = library.findIndex(p => p.id === state.id);
-  if (i >= 0) library[i] = clone(state); else library.unshift(clone(state));
-  library.sort((a, b) => b.updated - a.updated);
-  library = library.slice(0, 80);
-  store.set("kodpot.posters", library);
-  store.set("kodpot.currentPoster", state.id);
-  if ($("libBox").open) renderLib();
+const SAMPLE_CONTENT = {
+  tag: "আলো টিপস", title: "কম্পোনেন্ট বানানো এত সহজ!",
+  body: "`components/` ফোল্ডারে একটা `Card.alo` বানান, ব্যস! যেকোনো পেজে `<Card title=\"…\">` লিখলেই চলবে, `import`-এর ঝামেলা নেই। ভেতরের লেখা বসে `<slot />`-এ, আর `<style>` থাকে **শুধু কার্ডের ভেতরে**।",
+  code: "<template>\n  <article class=\"card\">\n    <h3>{{ props.title }}</h3>\n    <slot />\n  </article>\n</template>\n\n<style>\n  .card { padding: 24px; }\n</style>",
+  lang: "xml", file: "components/Card.alo"
+};
+// আগের ডিফল্ট sample কেউ না ছুঁয়ে থাকলে নতুন sample দিয়ে বদলায়
+const OLD_SAMPLE_CODE = "const prices = [120, 250, 80];\n\n// ১৫% ভ্যাট যোগ করে নতুন দাম\nconst withVat = prices.map((price) =>\n  Math.round(price * 1.15)\n);\n\nconsole.log(withVat); // [138, 288, 92]\nconsole.log(prices);  // [120, 250, 80]";
+function isOldSample(p){ return p.code === OLD_SAMPLE_CODE && p.title === "map() নতুন অ্যারে বানায়" && p.file === "map.js"; }
+function loadLibrary(){
+  let list = store.get(KEY.tabs, null);
+  if (!Array.isArray(list)) {
+    // প্রথমবার: পুরোনো লাইব্রেরির সর্বশেষ ৫টা ট্যাবে আসে, বাকিগুলো মুছে না ফেলে আলাদা key-তে থাকে
+    const old = store.get("kodpot.posters", []).filter(p => p && p.id).sort((a, b) => b.updated - a.updated);
+    list = old.slice(0, MAX_TABS);
+    if (old.length > MAX_TABS) store.set(KEY.archive, old.slice(MAX_TABS));
+  }
+  list = list.filter(p => p && p.id).slice(0, MAX_TABS);
+  list.forEach(p => {
+    if (!BN_FONTS[p.fontBn]) p.fontBn = "Noto Sans Bengali";
+    if (isOldSample(p)) Object.assign(p, SAMPLE_CONTENT);
+  });
+  if (!list.length) list = [samplePost()];
+  store.set(KEY.tabs, list);
+  return list;
 }
-function persist(){ clearTimeout(saveTimer); saveTimer = setTimeout(commit, 500); }
+let library = loadLibrary();
+let state = clone(library.find(p => p.id === store.get(KEY.current, null)) || library[0]);
+
+let saveTimer, dirty = false;
+function commit(){
+  clearTimeout(saveTimer);
+  if (dirty) { state.updated = Date.now(); dirty = false; }
+  const i = library.findIndex(p => p.id === state.id);
+  if (i >= 0) library[i] = clone(state); else library.push(clone(state));
+  store.set(KEY.tabs, library);
+  store.set(KEY.current, state.id);
+  renderTabs();
+}
+function changed(){
+  dirty = true; state.saved = false;
+  schedule();
+  clearTimeout(saveTimer); saveTimer = setTimeout(commit, 500);
+}
 
 /* ---------- fonts ---------- */
 // layout.alo-তে শুধু ডিফল্ট ফন্টগুলো আসে; বাকিগুলো বাছাই করলে তখন নামে
@@ -127,10 +155,51 @@ async function ensureFonts(){
   fontsKey = key;
 }
 
+/* ---------- logo ---------- */
+// state.logo খালি থাকলে msilabs-এর লোগো; আপলোড করলে ছোট করা PNG data URL
+const DEFAULT_LOGO = new URL("msilabs-logo.png", document.baseURI).href;
+let logoSlot = {src: "", img: null};
+const logoSrc = () => state.logo || DEFAULT_LOGO;
+function ensureLogo(){
+  const src = logoSrc();
+  if (logoSlot.src === src) return Promise.resolve();
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => { logoSlot = {src, img}; resolve(); };
+    img.onerror = () => { logoSlot = {src, img: null}; resolve(); };
+    img.src = src;
+  });
+}
+function shrinkImage(file, max){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      if (!img.width || !img.height) { reject(new Error("no size")); return; }
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL("image/png"));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("bad image")); };
+    img.src = url;
+  });
+}
+function drawLogo(ctx, img, x, y, size, radius){
+  const k = Math.min(size / img.width, size / img.height);
+  const w = img.width * k, h = img.height * k;
+  const squarish = Math.abs(img.width / img.height - 1) < 0.1;
+  ctx.save();
+  if (squarish) { rr(ctx, x, y, size, size, radius); ctx.clip(); }
+  ctx.drawImage(img, x + (size - w) / 2, y + (size - h) / 2, w, h);
+  ctx.restore();
+}
+
 /* ---------- text layout ---------- */
 function fontStr(style, size){
   const f = BN_FONTS[state.fontBn];
-  if (style.code) return `${style.bold ? 600 : 400} ${size}px "${state.fontCode}", "${state.fontBn}", monospace`;
+  if (style.code) return `${style.bold || style.title ? 600 : 400} ${size}px "${state.fontCode}", "${state.fontBn}", monospace`;
   const w = style.title ? f.title : style.bold ? f.bold : (style.weight || f.body);
   return `${w} ${size}px "${state.fontBn}", "Noto Sans Bengali", sans-serif`;
 }
@@ -145,7 +214,8 @@ function parseInline(s){
   return runs;
 }
 function layoutRich(ctx, text, size, maxW, base){
-  const lines = [], codeSize = size * 0.86, codePad = size * 0.28;
+  // শিরোনামে inline code box ছাড়া শুধু accent রঙে বসে, তাই প্যাডিং প্রায় লাগে না
+  const lines = [], codeSize = size * (base.title ? 0.84 : 0.86), codePad = size * (base.title ? 0.04 : 0.28);
   const measure = (t, st) => { ctx.font = fontStr(st, st.code ? codeSize : size); return ctx.measureText(t).width + (st.code ? codePad * 2 : 0); };
   for (const para of String(text || "").split("\n")) {
     let cur = [], curW = 0;
@@ -159,7 +229,17 @@ function layoutRich(ctx, text, size, maxW, base){
           const sw = measure(" ", st); cur.push({t: " ", st, w: sw, space: true}); curW += sw; continue;
         }
         const w = measure(p, st);
-        if (curW + w > maxW && cur.length) push();
+        if (curW + w > maxW && cur.length) {
+          // লাইন ভাঙে শুধু ফাঁকা জায়গায়: `import`-এর মতো জোড়া লাগা অংশ একসাথে পরের লাইনে যায়
+          let carry = [];
+          if (!cur[cur.length - 1].space) {
+            const s = cur.map(a => !!a.space).lastIndexOf(true);
+            if (s >= 0) carry = cur.splice(s + 1);
+          }
+          const carryW = carry.reduce((n, a) => n + a.w, 0);
+          curW -= carryW; push();
+          cur = carry; curW = carryW;
+        }
         if (w > maxW) {
           let chunk = "";
           for (const g of graphemes(p)) {
@@ -177,12 +257,38 @@ function layoutRich(ctx, text, size, maxW, base){
   while (lines.length && !lines[lines.length-1].atoms.length) lines.pop();
   return {lines, size, lh: size * (base.title ? 1.28 : 1.6), codeSize, codePad};
 }
+// শিরোনামের লাইনগুলো সমান ভাগে ভাঙে, যাতে শেষ লাইনে একটা শব্দ একা না পড়ে (CSS-এর text-wrap: balance-এর মতো)
+function balanceRich(ctx, text, L, maxW, base){
+  const n = L.lines.length;
+  if (n < 2) return L;
+  let widestWord = 0;
+  for (const line of L.lines) for (const a of line.atoms) if (!a.space) widestWord = Math.max(widestWord, a.w);
+  let lo = Math.max(maxW * 0.5, widestWord), hi = maxW, best = L;
+  for (let i = 0; i < 8; i++) {
+    const mid = (lo + hi) / 2, M = layoutRich(ctx, text, L.size, mid, base);
+    if (M.lines.length <= n) { best = M; hi = mid; } else lo = mid;
+  }
+  return best;
+}
+// ব্যাখ্যার শেষ লাইনে একটা শব্দ একা পড়লে লাইন একটু আগে ভাঙে, লাইনের সংখ্যা না বাড়িয়ে
+function avoidOrphan(ctx, text, L, maxW, base){
+  const n = L.lines.length;
+  // শব্দ গোনা হয় ফাঁকা জায়গা দিয়ে, কারণ "**ভেতরে**।"-এর মতো একটা শব্দ দুই টুকরো হতে পারে
+  const lastWords = M => 1 + M.lines[M.lines.length - 1].atoms.filter(a => a.space).length;
+  if (n < 2 || lastWords(L) >= 2) return L;
+  for (let w = maxW * 0.96; w >= maxW * 0.75; w -= maxW * 0.03) {
+    const M = layoutRich(ctx, text, L.size, w, base);
+    if (M.lines.length === n && lastWords(M) >= 2) return M;
+  }
+  return L;
+}
 function fitRich(ctx, text, maxW, maxSize, minSize, maxLines, base, maxH){
+  const done = L => (base.title ? balanceRich : avoidOrphan)(ctx, text, L, maxW, base);
   for (let s = maxSize; s >= minSize; s -= 2) {
     const L = layoutRich(ctx, text, s, maxW, base);
-    if (L.lines.length <= maxLines && (!maxH || L.lines.length * L.lh <= maxH)) return L;
+    if (L.lines.length <= maxLines && (!maxH || L.lines.length * L.lh <= maxH)) return done(L);
   }
-  return layoutRich(ctx, text, minSize, maxW, base);
+  return done(layoutRich(ctx, text, minSize, maxW, base));
 }
 function drawRich(ctx, L, x, y, color, strong, accent){
   ctx.textBaseline = "middle";
@@ -192,8 +298,10 @@ function drawRich(ctx, L, x, y, color, strong, accent){
     for (const a of line.atoms) {
       if (a.st.code) {
         ctx.font = fontStr(a.st, L.codeSize);
-        ctx.fillStyle = rgba(accent, 0.16);
-        rr(ctx, cx, cy - L.codeSize * 0.78, a.w, L.codeSize * 1.56, L.codeSize * 0.3); ctx.fill();
+        if (!a.st.title) {
+          ctx.fillStyle = rgba(accent, 0.16);
+          rr(ctx, cx, cy - L.codeSize * 0.78, a.w, L.codeSize * 1.56, L.codeSize * 0.3); ctx.fill();
+        }
         ctx.fillStyle = accent; ctx.fillText(a.t, cx + L.codePad, cy + L.codeSize * 0.04);
       } else {
         ctx.font = fontStr(a.st, L.size);
@@ -308,8 +416,9 @@ function drawCodeCard(ctx, C, x, y, w, t, u, label){
   if (state.showChrome) {
     ["#FF5F57","#FEBC2E","#28C840"].forEach((c, i) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x + 34*u + i*26*u, y + 36*u, 8*u, 0, Math.PI*2); ctx.fill(); });
     if (label) {
-      ctx.font = codeFont(20*u); ctx.fillStyle = t.syn.com; ctx.textAlign = "right";
-      ctx.fillText(label, x + w - 32*u, y + 37*u); ctx.textAlign = "left";
+      // macOS-এর মতো জানালার মাঝখানে; দুই পাশে বোতামের জায়গা বাদ রেখে
+      ctx.font = codeFont(23*u); ctx.fillStyle = t.muted; ctx.textAlign = "center";
+      ctx.fillText(fitText(ctx, label, w - 240*u), x + w/2, y + 37*u); ctx.textAlign = "left";
     }
   }
   const tx = x + C.padX + C.gutterW;
@@ -328,6 +437,12 @@ function drawCodeCard(ctx, C, x, y, w, t, u, label){
 }
 
 /* ---------- poster renderer ---------- */
+function fitText(ctx, s, maxW){
+  if (ctx.measureText(s).width <= maxW) return s;
+  const g = graphemes(s);
+  while (g.length > 1 && ctx.measureText(g.join("") + "…").width > maxW) g.pop();
+  return g.join("") + "…";
+}
 let lastCode = null;
 function renderPoster(canvas){
   const S = SIZES[state.size] || SIZES.portrait, W = S.w, H = S.h;
@@ -335,6 +450,8 @@ function renderPoster(canvas){
   if (canvas.height !== H) canvas.height = H;
   const ctx = canvas.getContext("2d");
   const t = THEMES[state.theme] || THEMES.night, accent = state.accent || t.accent;
+  // ব্যাখ্যা muted-এর চেয়ে উজ্জ্বল, শিরোনামের চেয়ে একটু হালকা: ফোনে পড়তে স্পষ্ট
+  const bodyInk = rgba(t.fg, 0.88);
   const wide = W / H > 1.4;
   const u = Math.min(W / 1080, H * 1.35 / 1080);
   const P = (wide ? 56 : 76) * u;
@@ -362,18 +479,37 @@ function renderPoster(canvas){
 
   // header: brand mark + page name
   const mk = 54*u;
-  ctx.fillStyle = accent; rr(ctx, P, P, mk, mk, 14*u); ctx.fill();
-  ctx.fillStyle = t.onAccent; ctx.font = codeFont(21*u, true); ctx.textAlign = "center";
-  ctx.fillText("</>", P + mk/2, P + mk/2 + 1*u); ctx.textAlign = "left";
+  const logo = logoSlot.src === logoSrc() ? logoSlot.img : null;
+  if (logo) drawLogo(ctx, logo, P, P, mk, 13*u);
+  else {
+    ctx.fillStyle = accent; rr(ctx, P, P, mk, mk, 14*u); ctx.fill();
+    ctx.fillStyle = t.onAccent; ctx.font = codeFont(21*u, true); ctx.textAlign = "center";
+    ctx.fillText("</>", P + mk/2, P + mk/2 + 1*u); ctx.textAlign = "left";
+  }
   ctx.fillStyle = t.fg; ctx.font = fontStr({weight: bold}, 28*u);
-  ctx.fillText(state.handle || "", P + mk + 18*u, P + mk/2 + 1*u);
+  const handleX = P + mk + 18*u;
+  ctx.fillText(state.handle || "", handleX, P + mk/2 + 1*u);
+  const handleEnd = handleX + (state.handle ? ctx.measureText(state.handle).width : 0);
+
+  // tag: হেডারের ডান দিকে; লম্বা হলে পেজের নামের সাথে না লেগে "…" দিয়ে কাটে
+  const tag = (state.tag || "").trim();
+  if (tag) {
+    const tagH = 46*u, padX = 20*u;
+    ctx.font = fontStr({weight: bold}, 22*u);
+    const maxText = W - P - (handleEnd + 32*u) - padX*2;
+    if (maxText > 60*u) {
+      const text = fitText(ctx, tag, maxText);
+      const tw = ctx.measureText(text).width + padX*2, tx = W - P - tw, ty = P + (mk - tagH)/2;
+      ctx.fillStyle = rgba(accent, 0.16); rr(ctx, tx, ty, tw, tagH, tagH/2); ctx.fill();
+      ctx.strokeStyle = rgba(accent, 0.35); ctx.lineWidth = 1.5*u; rr(ctx, tx, ty, tw, tagH, tagH/2); ctx.stroke();
+      ctx.fillStyle = accent; ctx.fillText(text, tx + padX, ty + tagH/2 + 1*u);
+    }
+  }
 
   // footer
   if (state.footer) {
     ctx.font = fontStr({}, 24*u); ctx.fillStyle = t.muted;
-    let f = state.footer; const maxF = W - 2*P;
-    while (f.length > 1 && ctx.measureText(f).width > maxF) f = f.slice(0, -2) + "…";
-    ctx.fillText(f, P, H - P - 14*u);
+    ctx.fillText(fitText(ctx, state.footer, W - 2*P), P, H - P - 14*u);
   }
   ctx.fillStyle = accent; ctx.fillRect(0, H - 8*u, W, 8*u);
 
@@ -381,25 +517,16 @@ function renderPoster(canvas){
   const avail = bottom - top;
   const hl = hasCode ? hlLines(state.code, state.lang) : null;
   const label = state.file || (hl ? (LANG_LABEL[hl.detected] || hl.detected || "") : "");
-  const tagH = 46*u;
-  const drawTag = (x, y) => {
-    ctx.font = fontStr({weight: bold}, 22*u);
-    const tw = ctx.measureText(state.tag).width + 36*u;
-    ctx.fillStyle = rgba(accent, 0.16); rr(ctx, x, y, tw, tagH, tagH/2); ctx.fill();
-    ctx.fillStyle = accent; ctx.fillText(state.tag, x + 18*u, y + tagH/2 + 1*u);
-  };
   lastCode = null;
 
   if (wide && hasCode) {
     const gap = 52*u, lw = (W - 2*P - gap) * 0.42, rx = P + lw + gap, rw = W - P - rx;
     const TL = fitRich(ctx, state.title, lw, 54*u, 30*u, 4, {title: true});
-    const tagB = state.tag ? tagH + 22*u : 0;
-    const BL = fitRich(ctx, state.body, lw, 26*u, 18*u, 99, {}, avail - richH(TL) - tagB - 22*u);
-    const leftH = tagB + richH(TL) + (state.body ? 22*u + richH(BL) : 0);
+    const BL = fitRich(ctx, state.body, lw, 29*u, 20*u, 99, {}, avail - richH(TL) - 22*u);
+    const leftH = richH(TL) + (state.body ? 22*u + richH(BL) : 0);
     let y = top + Math.max(0, (avail - leftH) / 2);
-    if (state.tag) { drawTag(P, y); y += tagB; }
     drawRich(ctx, TL, P, y, t.fg, t.fg, accent); y += richH(TL) + 22*u;
-    if (state.body) drawRich(ctx, BL, P, y, t.muted, t.fg, accent);
+    if (state.body) drawRich(ctx, BL, P, y, bodyInk, t.fg, accent);
     const C = layoutCode(ctx, hl, rw, avail + 30*u, u);
     drawCodeCard(ctx, C, rx, top - 15*u + Math.max(0, (avail + 30*u - C.h) / 2), rw, t, u, label);
     lastCode = C; return;
@@ -409,52 +536,76 @@ function renderPoster(canvas){
   if (!hasCode) {
     const TL = fitRich(ctx, state.title, cw, (wide ? 64 : 92)*u, 40*u, wide ? 3 : 5, {title: true});
     const BL = fitRich(ctx, state.body, cw * (wide ? 1 : 0.92), (wide ? 30 : 36)*u, 22*u, 99, {}, avail - richH(TL) - 140*u);
-    const gh = (state.tag ? tagH + 30*u : 0) + richH(TL) + (state.body ? 34*u + richH(BL) : 0);
+    const gh = richH(TL) + (state.body ? 34*u + richH(BL) : 0);
     let y = top + Math.max(0, (avail - gh) * 0.46);
-    if (state.tag) { drawTag(P, y); y += tagH + 30*u; }
     drawRich(ctx, TL, P, y, t.fg, t.fg, accent); y += richH(TL);
-    if (state.body) drawRich(ctx, BL, P, y + 34*u, t.muted, t.fg, accent);
+    if (state.body) drawRich(ctx, BL, P, y + 34*u, bodyInk, t.fg, accent);
     return;
   }
 
-  const tagB = state.tag ? tagH + 24*u : 0;
-  const TL = fitRich(ctx, state.title, cw, 66*u, 40*u, 3, {title: true});
-  const BL = state.body ? fitRich(ctx, state.body, cw, 30*u, 22*u, 99, {}, avail * 0.3) : {lines: [], lh: 0};
-  const textH = tagB + richH(TL) + (state.body ? 22*u + richH(BL) : 0);
-  const codeGap = 42*u;
-  const C = layoutCode(ctx, hl, cw, Math.max(180*u, avail - textH - codeGap), u);
+  // বর্গে উচ্চতা কম, তাই লেখা একটু ছোট রেখে কোডকে জায়গা দেওয়া হয়
+  // কোড কাটা পড়লে লেখা ধাপে ধাপে ছোট করে আবার চেষ্টা করে
+  const square = W === H, codeGap = 42*u;
+  let TL, BL, textH, C;
+  for (const k of [1, 0.9, 0.8]) {
+    TL = fitRich(ctx, state.title, cw, (square ? 58 : 66)*k*u, 36*u, 3, {title: true});
+    BL = state.body ? fitRich(ctx, state.body, cw, (square ? 30 : 34)*k*u, 22*u, 99, {}, avail * 0.3) : {lines: [], lh: 0};
+    textH = richH(TL) + (state.body ? 22*u + richH(BL) : 0);
+    C = layoutCode(ctx, hl, cw, Math.max(180*u, avail - textH - codeGap), u);
+    if (!C.truncated && C.size >= 21*u) break;
+  }
   let y = top + Math.max(0, (avail - (textH + codeGap + C.h)) * 0.42);
-  if (state.tag) { drawTag(P, y); y += tagB; }
   drawRich(ctx, TL, P, y, t.fg, t.fg, accent); y += richH(TL);
-  if (state.body) { y += 22*u; drawRich(ctx, BL, P, y, t.muted, t.fg, accent); y += richH(BL); }
+  if (state.body) { y += 22*u; drawRich(ctx, BL, P, y, bodyInk, t.fg, accent); y += richH(BL); }
   drawCodeCard(ctx, C, P, y + codeGap, cw, t, u, label);
   lastCode = C;
 }
 
 /* ---------- render loop ---------- */
-const poster = $("poster");
+const poster = $("poster"), stage = $("stage");
 let renderTimer;
 function schedule(){ clearTimeout(renderTimer); renderTimer = setTimeout(doRender, 60); }
 async function doRender(){
-  await ensureFonts();
+  await Promise.all([ensureFonts(), ensureLogo()]);
   renderPoster(poster);
-  const note = $("codeNote");
-  if (lastCode && (lastCode.truncated || lastCode.n > 22)) {
-    note.hidden = false;
-    note.textContent = lastCode.truncated
-      ? (state.size === "portrait" ? "কোডটা ছবিতে পুরোটা ধরছে না, শেষের অংশ কেটে গেছে। লাইন কমিয়ে দিন।" : "কোডটা ছবিতে পুরোটা ধরছে না, শেষের অংশ কেটে গেছে। লাইন কমান, অথবা মাপ পোর্ট্রেট করুন।")
-      : `কোডে ${bn(lastCode.n)} লাইন, ফোনে ছোট দেখাবে। ১৫ লাইনের মধ্যে রাখলে পড়তে সুবিধা।`;
-  } else note.hidden = true;
+  stage.style.setProperty("--glow", accentOf(state));
+  updateCodeMeta();
+}
+function updateCodeMeta(){
+  const meta = $("codeMeta"), cnt = $("codeCount"), msg = $("codeMsg");
+  if (!lastCode) { meta.dataset.s = "none"; cnt.textContent = "কোড নেই"; msg.textContent = "শুধু লেখার পোস্টার হবে"; return; }
+  cnt.textContent = `${bn(lastCode.n)} লাইন`;
+  if (lastCode.truncated) {
+    meta.dataset.s = "bad";
+    msg.textContent = state.size === "portrait"
+      ? "ছবিতে পুরোটা ধরছে না, শেষের অংশ কাটা পড়েছে। লাইন কমান।"
+      : "ছবিতে পুরোটা ধরছে না। লাইন কমান, অথবা মাপ পোর্ট্রেট করুন।";
+  } else if (lastCode.n > 15) {
+    meta.dataset.s = "warn"; msg.textContent = "ফোনে ছোট দেখাবে। ১৫ লাইনের মধ্যে রাখলে পড়তে সুবিধা।";
+  } else {
+    meta.dataset.s = "ok"; msg.textContent = "ফোনেও আরামে পড়া যাবে";
+  }
 }
 
 /* ---------- form ---------- */
 const F = {title: $("fTitle"), body: $("fBody"), code: $("fCode"), lang: $("fLang"), tag: $("fTag"), file: $("fFile")};
 LANGS.forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; F.lang.append(o); });
-for (const k in F) F[k].addEventListener("input", () => { state[k] = F[k].value; schedule(); persist(); });
+for (const k in F) F[k].addEventListener("input", () => { state[k] = F[k].value; changed(); });
 F.code.addEventListener("keydown", e => {
   if (e.key === "Tab" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
     e.preventDefault(); const el = F.code;
     el.setRangeText("  ", el.selectionStart, el.selectionEnd, "end"); el.dispatchEvent(new Event("input"));
+  }
+});
+$("btnPaste").addEventListener("click", async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text.trim()) { toast("ক্লিপবোর্ড খালি"); return; }
+    F.code.value = text; state.code = text; changed();
+    toast("কোড বসানো হয়েছে");
+  } catch {
+    toast("ক্লিপবোর্ড পড়া গেল না, কোড বক্সে ক্লিক করে পেস্ট করুন");
+    F.code.focus();
   }
 });
 
@@ -462,126 +613,292 @@ const sizeBox = $("sizes");
 for (const [k, s] of Object.entries(SIZES)) {
   const b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "radio"); b.dataset.k = k;
   b.append(s.label); const sm = document.createElement("small"); sm.textContent = s.ratio; b.append(sm);
-  b.addEventListener("click", () => { state.size = k; syncAll(); schedule(); persist(); });
+  b.addEventListener("click", () => { state.size = k; syncAll(); changed(); });
   sizeBox.append(b);
 }
-const themeBox = $("themes");
+
+const themeBox = $("themes"), themeGrid = $("themeGrid");
 for (const [k, th] of Object.entries(THEMES)) {
-  const b = document.createElement("button"); b.type = "button"; b.className = "dot"; b.setAttribute("role", "radio");
-  b.dataset.k = k; b.title = th.name;
+  const pick = () => { state.theme = k; state.accent = null; syncAll(); changed(); };
+
+  const d = document.createElement("button"); d.type = "button"; d.className = "dot"; d.setAttribute("role", "radio");
+  d.dataset.k = k; d.title = th.name; d.setAttribute("aria-label", th.name);
   const sw = document.createElement("i"); sw.className = "sw";
   sw.style.background = `linear-gradient(135deg, ${th.bg1}, ${th.bg2})`; sw.style.setProperty("--a", th.accent);
+  d.append(sw); d.addEventListener("click", pick); themeBox.append(d);
+
+  const c = document.createElement("button"); c.type = "button"; c.className = "tcard"; c.setAttribute("role", "radio"); c.dataset.k = k;
+  const pv = document.createElement("span"); pv.className = "tprev";
+  const vars = {"--b1": th.bg1, "--b2": th.bg2, "--a": th.accent, "--f": th.fg, "--m": th.muted, "--c": th.card, "--cl": th.cardLine, "--k": th.syn.kw, "--s": th.syn.str, "--n": th.syn.fn};
+  for (const v in vars) pv.style.setProperty(v, vars[v]);
+  pv.innerHTML = '<i class="tl t1"></i><i class="tl t2"></i><i class="tl t3"></i><span class="tcode"><i></i><i></i><i></i></span>';
   const nm = document.createElement("span"); nm.textContent = th.name;
-  b.append(sw, nm);
-  b.addEventListener("click", () => { state.theme = k; state.accent = null; syncAll(); schedule(); persist(); });
-  themeBox.append(b);
+  c.append(pv, nm); c.addEventListener("click", pick); themeGrid.append(c);
 }
+
 const dFontBn = $("dFontBn");
 for (const [k, v] of Object.entries(BN_FONTS)) { const o = document.createElement("option"); o.value = k; o.textContent = v.label; dFontBn.append(o); }
 const dFontCode = $("dFontCode");
 CODE_FONTS.forEach(k => { const o = document.createElement("option"); o.value = k; o.textContent = k; dFontCode.append(o); });
 const D = {fontBn: dFontBn, fontCode: dFontCode, handle: $("dHandle"), footer: $("dFooter")};
-for (const k in D) D[k].addEventListener("input", () => { state[k] = D[k].value; schedule(); persist(); });
+for (const k in D) D[k].addEventListener("input", () => { state[k] = D[k].value; changed(); });
 const T = {showLineNo: $("tLine"), showChrome: $("tChrome")};
-for (const k in T) T[k].addEventListener("change", () => { state[k] = T[k].checked; schedule(); persist(); });
-$("dCodeSize").addEventListener("input", e => { state.codeSize = +e.target.value; syncAll(); schedule(); persist(); });
-$("dAccent").addEventListener("input", e => { state.accent = e.target.value; schedule(); persist(); });
-$("dAccentReset").addEventListener("click", () => { state.accent = null; syncAll(); schedule(); persist(); });
+for (const k in T) T[k].addEventListener("change", () => { state[k] = T[k].checked; changed(); });
+$("dCodeSize").addEventListener("input", e => { state.codeSize = +e.target.value; syncAll(); changed(); });
+$("dAccent").addEventListener("input", e => { state.accent = e.target.value; changed(); });
+$("dAccentReset").addEventListener("click", () => { state.accent = null; syncAll(); changed(); });
+$("logoUp").addEventListener("click", () => $("dLogo").click());
+$("logoReset").addEventListener("click", () => { state.logo = null; syncAll(); changed(); toast("msilabs-এর লোগো বসানো হয়েছে"); });
+$("dLogo").addEventListener("change", async e => {
+  const file = e.target.files[0]; e.target.value = "";
+  if (!file) return;
+  try {
+    state.logo = await shrinkImage(file, 256);
+    syncAll(); changed(); toast("লোগো বদলানো হয়েছে");
+  } catch { toast("এই ফাইল থেকে লোগো নেওয়া গেল না, PNG বা JPG দিন"); }
+});
 
 function syncAll(){
   for (const k in F) F[k].value = state[k] || (k === "lang" ? "auto" : "");
   for (const k in D) D[k].value = state[k] ?? "";
   for (const k in T) T[k].checked = !!state[k];
   sizeBox.querySelectorAll("button").forEach(b => b.setAttribute("aria-checked", b.dataset.k === state.size ? "true" : "false"));
-  themeBox.querySelectorAll(".dot").forEach(b => b.setAttribute("aria-checked", b.dataset.k === state.theme ? "true" : "false"));
+  document.querySelectorAll("#themes [data-k], #themeGrid [data-k]").forEach(b => b.setAttribute("aria-checked", b.dataset.k === state.theme ? "true" : "false"));
   $("dAccent").value = state.accent || THEMES[state.theme].accent;
+  $("logoPrev").src = logoSrc();
   $("dCodeSize").value = state.codeSize || 0;
   $("dCodeSizeVal").textContent = state.codeSize ? bn(state.codeSize) : "নিজে থেকে";
 }
 
-/* ---------- earlier posters ---------- */
-const fmtDate = ts => { try { return new Date(ts).toLocaleDateString("bn-BD", {day: "numeric", month: "long"}); } catch { return ""; } };
-function armed(btn, label, fn){
-  btn.addEventListener("click", () => {
-    if (btn.dataset.arm === "1") { clearTimeout(btn._t); fn(); return; }
-    btn.dataset.arm = "1"; const old = btn.textContent; btn.textContent = label; btn.classList.add("arm");
-    btn._t = setTimeout(() => { btn.dataset.arm = ""; btn.textContent = old; btn.classList.remove("arm"); }, 3000);
+/* ---------- panel tabs & mobile view ---------- */
+const PANES = {tabWrite: "paneWrite", tabDesign: "paneDesign"};
+function showPane(id){
+  for (const t in PANES) {
+    const on = t === id;
+    $(t).setAttribute("aria-selected", String(on)); $(t).tabIndex = on ? 0 : -1; $(PANES[t]).hidden = !on;
+  }
+  store.set(KEY.pane, id);
+}
+for (const t in PANES) {
+  $(t).addEventListener("click", () => showPane(t));
+  $(t).addEventListener("keydown", e => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const next = t === "tabWrite" ? "tabDesign" : "tabWrite";
+    showPane(next); $(next).focus();
   });
 }
-function renderLib(){
-  const box = $("libList"); box.textContent = "";
+
+const work = $("work"), viewBtns = $("viewSeg").querySelectorAll("button");
+function setView(v){
+  work.dataset.view = v;
+  viewBtns.forEach(b => b.setAttribute("aria-checked", String(b.dataset.v === v)));
+}
+viewBtns.forEach(b => b.addEventListener("click", () => { setView(b.dataset.v); window.scrollTo({top: 0}); }));
+
+/* ---------- poster tabs ---------- */
+const X_SVG = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+const OK_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+function accentOf(p){ return p.accent || (THEMES[p.theme] || THEMES.night).accent; }
+function titleOf(p){ return (p.title || "").trim() || "শিরোনাম নেই"; }
+function shortTitle(p){ const s = titleOf(p); return s.length > 24 ? s.slice(0, 23) + "…" : s; }
+function ago(ts){
+  const m = Math.round((Date.now() - ts) / 60000);
+  if (m < 1) return "এইমাত্র";
+  if (m < 60) return `${bn(m)} মিনিট আগে`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${bn(h)} ঘণ্টা আগে`;
+  const d = Math.round(h / 24);
+  if (d < 30) return `${bn(d)} দিন আগে`;
+  try { return new Date(ts).toLocaleDateString("bn-BD", {day: "numeric", month: "long"}); } catch { return ""; }
+}
+
+function renderTabs(){
+  const box = $("tabs"); box.textContent = "";
   library.forEach(p => {
-    const row = document.createElement("div"); row.className = "libitem"; row.setAttribute("aria-current", p.id === state.id ? "true" : "false");
-    const tx = document.createElement("div"); tx.className = "t";
-    const b = document.createElement("b"); b.textContent = p.title || "শিরোনাম নেই";
-    const sm = document.createElement("small"); sm.textContent = (p.id === state.id ? "খোলা আছে · " : "") + fmtDate(p.updated);
-    tx.append(b, sm); row.append(tx);
-    if (p.id !== state.id) {
-      const o = document.createElement("button"); o.className = "ib"; o.type = "button"; o.textContent = "খুলুন";
-      o.addEventListener("click", () => loadPost(p.id));
-      const d = document.createElement("button"); d.className = "ib warn"; d.type = "button"; d.textContent = "মুছুন";
-      armed(d, "নিশ্চিত?", () => { library = library.filter(x => x.id !== p.id); store.set("kodpot.posters", library); renderLib(); toast("পোস্টার মুছে ফেলা হয়েছে"); });
-      row.append(o, d);
+    const on = p.id === state.id;
+    const tab = document.createElement("div"); tab.className = on ? "ptab on" : "ptab";
+    const open = document.createElement("button"); open.type = "button"; open.className = "ptab-open"; open.title = titleOf(p);
+    if (on) open.setAttribute("aria-current", "true");
+    const dot = document.createElement("i"); dot.className = "pdot"; dot.style.setProperty("--a", accentOf(p));
+    const nm = document.createElement("span"); nm.className = "pt"; nm.textContent = titleOf(p);
+    open.append(dot, nm);
+    if (p.saved) {
+      const ok = document.createElement("span"); ok.className = "pok"; ok.title = "ছবি সেভ করা হয়েছে"; ok.innerHTML = OK_SVG;
+      open.append(ok);
     }
-    box.append(row);
+    open.addEventListener("click", () => { if (p.id !== state.id) loadPost(p.id); });
+    tab.append(open);
+    if (library.length > 1) {
+      const x = document.createElement("button"); x.type = "button"; x.className = "ptab-x";
+      x.setAttribute("aria-label", `“${shortTitle(p)}” মুছুন`); x.title = "মুছুন"; x.innerHTML = X_SVG;
+      x.addEventListener("click", () => closeTab(p.id));
+      tab.append(x);
+    }
+    box.append(tab);
+  });
+  $("tabAdd").title = library.length >= MAX_TABS ? "৫টা ট্যাবই ভরা, একটা সরিয়ে নতুন বানাতে হবে" : "নতুন পোস্টার";
+  $("tabCount").textContent = `${bn(library.length)}/${bn(MAX_TABS)}`;
+}
+function focusTab(){
+  requestAnimationFrame(() => {
+    const on = $("tabs").querySelector(".ptab.on");
+    if (on) on.scrollIntoView({block: "nearest", inline: "nearest"});
   });
 }
-$("libBox").addEventListener("toggle", () => { if ($("libBox").open) renderLib(); });
 function loadPost(id){
-  clearTimeout(saveTimer); commit();
+  commit();
   const p = library.find(x => x.id === id); if (!p) return;
-  state = clone(p); store.set("kodpot.currentPoster", id);
-  syncAll(); schedule(); renderLib(); toast("পোস্টার খোলা হয়েছে");
+  state = clone(p);
+  store.set(KEY.current, id);
+  syncAll(); schedule(); renderTabs(); focusTab();
 }
-$("libNew").addEventListener("click", () => {
-  clearTimeout(saveTimer); commit();
-  const p = {id: uid(), updated: Date.now(), tag: "", title: "পোস্টের শিরোনাম লিখুন", body: "এখানে ছোট করে ব্যাখ্যা লিখুন।", code: "// এখানে আপনার কোড পেস্ট করুন", lang: "auto", file: ""};
+function startNew(){
+  const p = {id: uid(), updated: Date.now(), saved: false, tag: "", title: "পোস্টের শিরোনাম লিখুন", body: "এখানে ছোট করে ব্যাখ্যা লিখুন।", code: "// এখানে আপনার কোড পেস্ট করুন", lang: "auto", file: ""};
   DESIGN_KEYS.forEach(k => p[k] = state[k]);
-  state = p; commit(); syncAll(); schedule();
+  library.push(clone(p)); state = p; dirty = false;
+  commit(); syncAll(); schedule(); focusTab();
+  showPane("tabWrite"); setView("edit");
   F.title.focus(); F.title.select();
-  toast("নতুন পোস্টার শুরু হলো, ডিজাইন আগেরটার মতো রাখা হয়েছে");
+}
+const snapshot = () => ({library: clone(library), current: state.id});
+function undoAction(snap){
+  return {label: "ফিরিয়ে আনুন", fn: () => {
+    library = clone(snap.library);
+    state = clone(library.find(p => p.id === snap.current) || library[0]);
+    dirty = false;
+    commit(); syncAll(); schedule(); focusTab();
+    toast("ফিরিয়ে আনা হয়েছে");
+  }};
+}
+function closeTab(id){
+  if (library.length < 2) return;
+  commit();
+  const snap = snapshot();
+  const i = library.findIndex(p => p.id === id); if (i < 0) return;
+  const gone = library[i];
+  library.splice(i, 1);
+  if (id === state.id) { state = clone(library[Math.min(i, library.length - 1)]); syncAll(); schedule(); }
+  commit();
+  toast(`“${shortTitle(gone)}” মুছে ফেলা হয়েছে`, undoAction(snap));
+}
+
+const replaceDlg = $("replaceDlg");
+function openReplace(){
+  commit();
+  const list = $("replaceList"); list.textContent = "";
+  const oldest = library.reduce((a, b) => (b.updated < a.updated ? b : a));
+  library.forEach(p => {
+    const lb = document.createElement("label");
+    const r = document.createElement("input"); r.type = "radio"; r.name = "victim"; r.value = p.id; r.checked = p.id === oldest.id;
+    const dot = document.createElement("i"); dot.className = "pdot"; dot.style.setProperty("--a", accentOf(p));
+    const tx = document.createElement("span"); tx.className = "pt";
+    const b = document.createElement("b"); b.textContent = titleOf(p);
+    const sm = document.createElement("small");
+    sm.textContent = [ago(p.updated), p.saved ? "ছবি সেভ করা" : "", p.id === oldest.id ? "সবচেয়ে পুরোনো" : ""].filter(Boolean).join(" · ");
+    tx.append(b, sm); lb.append(r, dot, tx); list.append(lb);
+  });
+  replaceDlg.returnValue = "";
+  replaceDlg.showModal();
+}
+replaceDlg.addEventListener("close", () => {
+  if (replaceDlg.returnValue !== "ok") return;
+  const r = $("replaceList").querySelector("input:checked"); if (!r) return;
+  const victim = library.find(p => p.id === r.value); if (!victim) return;
+  const snap = snapshot();
+  library = library.filter(p => p.id !== victim.id);
+  startNew();
+  toast(`“${shortTitle(victim)}” সরিয়ে নতুন পোস্টার খোলা হলো`, undoAction(snap));
+});
+$("tabAdd").addEventListener("click", () => {
+  if (library.length >= MAX_TABS) { openReplace(); return; }
+  commit(); startNew();
+  toast("নতুন পোস্টার, ডিজাইন আগেরটার মতো রাখা হয়েছে");
 });
 
-/* ---------- save / copy ---------- */
+/* ---------- toast ---------- */
 let toastT;
-function toast(msg){ const el = $("toast"); el.textContent = msg; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 3200); }
+function hideToast(){ $("toast").classList.remove("show"); }
+function toast(msg, action){
+  const el = $("toast"); el.textContent = "";
+  const s = document.createElement("span"); s.textContent = msg; el.append(s);
+  if (action) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "toastBtn"; b.textContent = action.label;
+    b.addEventListener("click", () => { hideToast(); action.fn(); });
+    el.append(b);
+  }
+  el.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(hideToast, action ? 6000 : 3200);
+}
+function flash(btn, text){
+  const label = btn.querySelector(".bt");
+  if (!label.dataset.t) label.dataset.t = label.textContent;
+  btn.classList.add("ok"); label.textContent = text;
+  clearTimeout(btn._f);
+  btn._f = setTimeout(() => { btn.classList.remove("ok"); label.textContent = label.dataset.t; }, 1600);
+}
+
+/* ---------- save / copy ---------- */
 const fileName = () => "msilabs-" + ((state.title || "poster").trim().replace(/[\\/:*?"<>|`(){}\[\]]+/g, "").replace(/\s+/g, "-").slice(0, 40) || "poster") + ".png";
 const toBlob = c => new Promise(r => c.toBlob(r, "image/png"));
 function freshCanvas(){ const c = document.createElement("canvas"); renderPoster(c); return c; }
-function showFallback(c){ $("modalImg").src = c.toDataURL("image/png"); $("modal").hidden = false; $("modalClose").focus(); }
+function showFallback(c){ $("modalImg").src = c.toDataURL("image/png"); $("saveDlg").showModal(); }
+function download(blob, name){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+function markSaved(){ state.saved = true; commit(); }
 
 $("btnSave").addEventListener("click", async () => {
   const btn = $("btnSave"); if (btn.disabled) return; btn.disabled = true;
   try {
-    await ensureFonts();
+    await Promise.all([ensureFonts(), ensureLogo()]);
     const c = freshCanvas();
     const blob = await toBlob(c);
     if (!blob || !("download" in HTMLAnchorElement.prototype)) { showFallback(c); return; }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = fileName();
-    document.body.append(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    download(blob, fileName());
+    markSaved(); flash(btn, "সেভ হয়েছে");
     toast("ছবি সেভ হয়েছে");
   } catch (e) { console.error(e); toast("ছবি বানাতে সমস্যা হলো, আবার চেষ্টা করুন"); }
   finally { btn.disabled = false; }
 });
 $("btnCopy").addEventListener("click", () => {
+  const btn = $("btnCopy");
   const fail = () => toast("এখানে ছবি কপি করা যাচ্ছে না, “ছবি সেভ করুন” ব্যবহার করুন");
   try {
     if (!navigator.clipboard || !window.ClipboardItem) return fail();
-    navigator.clipboard.write([new ClipboardItem({"image/png": toBlob(freshCanvas())})])
-      .then(() => toast("ছবি কপি হয়েছে, পোস্টে পেস্ট করুন")).catch(fail);
+    const blob = Promise.all([ensureFonts(), ensureLogo()]).then(() => toBlob(freshCanvas()));
+    navigator.clipboard.write([new ClipboardItem({"image/png": blob})])
+      .then(() => { markSaved(); flash(btn, "কপি হয়েছে"); toast("ছবি কপি হয়েছে, পোস্টে পেস্ট করুন"); })
+      .catch(fail);
   } catch { fail(); }
 });
-$("modalClose").addEventListener("click", () => $("modal").hidden = true);
-$("modal").addEventListener("click", e => { if (e.target === $("modal")) $("modal").hidden = true; });
+document.querySelectorAll("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d) d.close("cancel"); }));
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") $("modal").hidden = true;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); $("btnSave").click(); }
 });
+$("kbd").textContent = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent) ? "⌘S" : "Ctrl+S";
+
+/* ---------- old posters that did not fit in the tabs ---------- */
+const archive = store.get(KEY.archive, []);
+function hideArchive(){ store.set(KEY.archiveHidden, true); $("archNote").hidden = true; }
+if (archive.length && !store.get(KEY.archiveHidden, false)) {
+  $("archCount").textContent = bn(archive.length);
+  $("archNote").hidden = false;
+}
+$("archDl").addEventListener("click", () => {
+  download(new Blob([JSON.stringify(archive, null, 2)], {type: "application/json"}), "code-poster-archive.json");
+  hideArchive(); toast("JSON ফাইল ডাউনলোড হয়েছে");
+});
+$("archHide").addEventListener("click", hideArchive);
 
 /* ---------- boot ---------- */
-syncAll(); doRender();
+const savedPane = store.get(KEY.pane, "tabWrite");
+showPane(PANES[savedPane] ? savedPane : "tabWrite");
+setView("edit");
+syncAll(); renderTabs(); focusTab(); doRender();
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { fontsKey = ""; schedule(); });
 })();
