@@ -8,10 +8,9 @@ const SIZES = {
   wide:     {w:1200,h:630, label:"চওড়া",ratio:"১.৯:১"}
 };
 const BN_FONTS = {
-  "Hind Siliguri":     {title:700,bold:600,body:400,label:"হিন্দ শিলিগুড়ি"},
+  "Noto Sans Bengali": {title:700,bold:600,body:400,label:"নোটো সান্স বাংলা"},
   "Anek Bangla":       {title:700,bold:600,body:400,label:"অনেক বাংলা"},
   "Baloo Da 2":        {title:700,bold:600,body:400,label:"বালু দা"},
-  "Noto Sans Bengali": {title:700,bold:700,body:400,label:"নোটো সান্স বাংলা"},
   "Noto Serif Bengali":{title:700,bold:700,body:400,label:"নোটো সেরিফ বাংলা"},
   "Tiro Bangla":       {title:400,bold:400,body:400,label:"তিরো বাংলা"}
 };
@@ -69,7 +68,7 @@ const DESIGN_KEYS = ["size","theme","accent","fontBn","fontCode","codeSize","han
 function samplePost(){
   return {
     id: uid(), updated: Date.now(),
-    size: "portrait", theme: "night", accent: null, fontBn: "Hind Siliguri", fontCode: "JetBrains Mono",
+    size: "portrait", theme: "night", accent: null, fontBn: "Noto Sans Bengali", fontCode: "JetBrains Mono",
     codeSize: 0, handle: "msilabs", footer: "প্রতি সপ্তাহে নতুন কোড টিপস", showLineNo: true, showChrome: true,
     tag: "JavaScript টিপস", title: "map() নতুন অ্যারে বানায়",
     body: "প্রতিটা উপাদান বদলে একটা **নতুন অ্যারে** ফেরত দেয়, মূল অ্যারে যেমন ছিল তেমনই থাকে। শুধু কাজ চালাতে চাইলে `forEach()` যথেষ্ট।",
@@ -78,6 +77,7 @@ function samplePost(){
   };
 }
 let library = store.get("kodpot.posters", []);
+library.forEach(p => { if (!BN_FONTS[p.fontBn]) p.fontBn = "Noto Sans Bengali"; });
 let state = library.find(p => p.id === store.get("kodpot.currentPoster", null)) || library[0];
 if (!state) { state = samplePost(); library = [clone(state)]; }
 state = clone(state);

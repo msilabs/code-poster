@@ -3,8 +3,8 @@
   --bg:#EEF1EF; --panel:#FFFFFF; --sunk:#F5F7F6; --ink:#16211E; --muted:#5A6A65; --line:#D8E0DC;
   --accent:#0E7A60; --accent-ink:#FFFFFF; --accent-soft:rgba(14,122,96,.10); --table:#DFE5E2; --danger:#B3261E;
   --surface:var(--panel); --page-max:none; --footer-gap:0px;
-  --f-ui:"Hind Siliguri","Noto Sans Bengali",system-ui,sans-serif;
-  --f-display:"Anek Bangla","Hind Siliguri",system-ui,sans-serif;
+  --f-ui:"Noto Sans Bengali",system-ui,sans-serif;
+  --f-display:"Anek Bangla","Noto Sans Bengali",system-ui,sans-serif;
   --f-code:"JetBrains Mono","Fira Code",ui-monospace,monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
