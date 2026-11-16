@@ -96,10 +96,30 @@ function commit(){
 function persist(){ clearTimeout(saveTimer); saveTimer = setTimeout(commit, 500); }
 
 /* ---------- fonts ---------- */
+// layout.alo-তে শুধু ডিফল্ট ফন্টগুলো আসে; বাকিগুলো বাছাই করলে তখন নামে
+const FONT_QUERY = {
+  "Baloo Da 2": "Baloo+Da+2:wght@400;600;700",
+  "Noto Serif Bengali": "Noto+Serif+Bengali:wght@400;700",
+  "Tiro Bangla": "Tiro+Bangla",
+  "Fira Code": "Fira+Code:wght@400;600",
+  "IBM Plex Mono": "IBM+Plex+Mono:wght@400;600"
+};
+const fontLinks = {};
+function linkFont(name){
+  const q = FONT_QUERY[name];
+  if (!q) return Promise.resolve();
+  return fontLinks[name] || (fontLinks[name] = new Promise(resolve => {
+    const l = document.createElement("link");
+    l.rel = "stylesheet"; l.href = `https://fonts.googleapis.com/css2?family=${q}&display=swap`;
+    l.onload = l.onerror = resolve;
+    document.head.append(l);
+  }));
+}
 let fontsKey = "";
 async function ensureFonts(){
   const key = state.fontBn + "|" + state.fontCode;
   if (key === fontsKey) return;
+  await Promise.all([linkFont(state.fontBn), linkFont(state.fontCode)]);
   const f = BN_FONTS[state.fontBn], sample = "বাংলা কোড ক্ষ্ম Abc ১২৩ {}";
   const reqs = [f.title, f.bold, f.body].map(w => `${w} 40px "${state.fontBn}"`)
     .concat([`400 40px "${state.fontCode}"`, `600 40px "${state.fontCode}"`]);
@@ -448,8 +468,11 @@ for (const [k, s] of Object.entries(SIZES)) {
 const themeBox = $("themes");
 for (const [k, th] of Object.entries(THEMES)) {
   const b = document.createElement("button"); b.type = "button"; b.className = "dot"; b.setAttribute("role", "radio");
-  b.dataset.k = k; b.title = th.name; b.setAttribute("aria-label", th.name);
-  b.style.background = `linear-gradient(135deg, ${th.bg1}, ${th.bg2})`; b.style.setProperty("--a", th.accent);
+  b.dataset.k = k; b.title = th.name;
+  const sw = document.createElement("i"); sw.className = "sw";
+  sw.style.background = `linear-gradient(135deg, ${th.bg1}, ${th.bg2})`; sw.style.setProperty("--a", th.accent);
+  const nm = document.createElement("span"); nm.textContent = th.name;
+  b.append(sw, nm);
   b.addEventListener("click", () => { state.theme = k; state.accent = null; syncAll(); schedule(); persist(); });
   themeBox.append(b);
 }
@@ -553,7 +576,10 @@ $("btnCopy").addEventListener("click", () => {
 });
 $("modalClose").addEventListener("click", () => $("modal").hidden = true);
 $("modal").addEventListener("click", e => { if (e.target === $("modal")) $("modal").hidden = true; });
-document.addEventListener("keydown", e => { if (e.key === "Escape") $("modal").hidden = true; });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") $("modal").hidden = true;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); $("btnSave").click(); }
+});
 
 /* ---------- boot ---------- */
 syncAll(); doRender();

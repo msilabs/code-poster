@@ -4,8 +4,10 @@
 
 - মাপ: বর্গ ১:১, পোর্ট্রেট ৪:৫, চওড়া ১.৯:১
 - থিম, বাংলা ফন্ট, কোডের ফন্ট ও রং বদলানো যায়
-- PNG সেভ বা ছবি কপি করা যায়
+- PNG সেভ বা ছবি কপি করা যায় (`Cmd/Ctrl + S` চাপলেও সেভ হয়)
 - সব কাজ ব্রাউজারে হয়, কোনো সার্ভার লাগে না
+- শুরুতে শুধু ডিফল্ট ফন্ট নামে, অন্য ফন্ট বাছাই করলে তখন নামে
+- আলো আর অন্ধকার থিম
 
 সাইট বানানো হয় [আলো (Alo)](https://github.com/msilabs/alo) দিয়ে। Node.js ২২ বা নতুন ভার্সন লাগবে।
 
@@ -22,7 +24,10 @@ GitHub Pages-এর মতো সাব-পাথের জন্য: `node alo 
 ## ফাইল কোথায়
 
 ```
-pages/page.alo     পেজের HTML
-global/style.css   সব CSS
-global/app.js      পোস্টার বানানোর JS
+pages/page.alo             পেজের HTML
+pages/layout.alo           head, ফন্ট, হেডার আর ফুটার
+components/SiteHeader.alo  GitHub স্টার বাটন আর থিম বদলের বাটনসহ হেডার
+components/SiteFooter.alo  ফুটার
+global/style.css           সব CSS
+global/app.js              পোস্টার বানানোর JS
 ```
