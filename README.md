@@ -7,4 +7,22 @@
 - PNG সেভ বা ছবি কপি করা যায়
 - সব কাজ ব্রাউজারে হয়, কোনো সার্ভার লাগে না
 
-`index.html` খুললেই টুলটি চালু হয়।
+সাইট বানানো হয় [আলো (Alo)](https://github.com/msilabs/alo) দিয়ে। Node.js ২২ বা নতুন ভার্সন লাগবে।
+
+## চালানো
+
+```bash
+npm install
+npm run dev     # http://localhost:3000
+npm run build   # dist/ ফোল্ডারে সাইট
+```
+
+GitHub Pages-এর মতো সাব-পাথের জন্য: `node alo build --base /msilabs-poster-maker/`
+
+## ফাইল কোথায়
+
+```
+pages/page.alo     পেজের HTML
+global/style.css   সব CSS
+global/app.js      পোস্টার বানানোর JS
+```

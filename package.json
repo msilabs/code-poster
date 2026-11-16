@@ -1,0 +1,15 @@
+{
+    "name": "msilabs-poster-maker",
+    "private": true,
+    "description": "কোড পেস্ট করলে বাংলা ব্যাখ্যাসহ সোশ্যাল মিডিয়ার পোস্টার তৈরি হয়",
+    "engines": {
+        "node": ">=22"
+    },
+    "scripts": {
+        "dev": "alo dev",
+        "build": "alo build"
+    },
+    "devDependencies": {
+        "@msilabs/alo": "^1.1.0"
+    }
+}
