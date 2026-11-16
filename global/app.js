@@ -522,9 +522,6 @@ $("libNew").addEventListener("click", () => {
 /* ---------- save / copy ---------- */
 let toastT;
 function toast(msg){ const el = $("toast"); el.textContent = msg; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 3200); }
-let downloadsP = null;
-const getDownloads = () => downloadsP || (downloadsP = (async () => { try { return window.claude && window.claude.use ? await window.claude.use("downloads") : null; } catch { return null; } })());
-getDownloads();
 const fileName = () => "msilabs-" + ((state.title || "poster").trim().replace(/[\\/:*?"<>|`(){}\[\]]+/g, "").replace(/\s+/g, "-").slice(0, 40) || "poster") + ".png";
 const toBlob = c => new Promise(r => c.toBlob(r, "image/png"));
 function freshCanvas(){ const c = document.createElement("canvas"); renderPoster(c); return c; }
@@ -534,16 +531,15 @@ $("btnSave").addEventListener("click", async () => {
   const btn = $("btnSave"); if (btn.disabled) return; btn.disabled = true;
   try {
     await ensureFonts();
-    const c = freshCanvas(), name = fileName();
-    const dl = await getDownloads();
-    if (!dl) { showFallback(c); return; }
-    try { await dl.save({filename: name, data: await toBlob(c)}); toast("ছবি সেভ হয়েছে"); }
-    catch (e) {
-      const code = e && e.code;
-      if (code === "declined") toast("সেভ বাতিল করা হয়েছে");
-      else if (code === "rate_limited") toast("আগের সেভের জানালা এখনো খোলা, একটু পরে আবার চাপুন");
-      else showFallback(c);
-    }
+    const c = freshCanvas();
+    const blob = await toBlob(c);
+    if (!blob || !("download" in HTMLAnchorElement.prototype)) { showFallback(c); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = fileName();
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast("ছবি সেভ হয়েছে");
   } catch (e) { console.error(e); toast("ছবি বানাতে সমস্যা হলো, আবার চেষ্টা করুন"); }
   finally { btn.disabled = false; }
 });
